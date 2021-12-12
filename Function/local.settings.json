@@ -1,0 +1,7 @@
+{
+    "IsEncrypted": false,
+    "Values": {
+        "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=smokstorage;AccountKey=uRyQx2sQBQpwpMJW7O/fl5l3+j6F/yJ5iK0RTms56NSEJYr3t5RESfVB4n5+vDhXdLk5oSNDNP/owtpIYMbPpQ==;BlobEndpoint=https://smokstorage.blob.core.windows.net/;TableEndpoint=https://smokstorage.table.core.windows.net/;QueueEndpoint=https://smokstorage.queue.core.windows.net/;FileEndpoint=https://smokstorage.file.core.windows.net/",
+        "FUNCTIONS_WORKER_RUNTIME": "dotnet"
+    }
+}

@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.30804.86
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Smok", "Smok.csproj", "{4A6BB067-648C-4FE8-B20E-FE81AFEB9ABB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Smok", "Function\Smok.csproj", "{F8CF9F93-D774-4C49-9A44-31F3B785B8B6}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SmokViewer", "Viewer\SmokViewer.csproj", "{459E488E-FF03-4C2A-B497-A052310CDF50}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +13,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{4A6BB067-648C-4FE8-B20E-FE81AFEB9ABB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4A6BB067-648C-4FE8-B20E-FE81AFEB9ABB}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4A6BB067-648C-4FE8-B20E-FE81AFEB9ABB}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4A6BB067-648C-4FE8-B20E-FE81AFEB9ABB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F8CF9F93-D774-4C49-9A44-31F3B785B8B6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F8CF9F93-D774-4C49-9A44-31F3B785B8B6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F8CF9F93-D774-4C49-9A44-31F3B785B8B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F8CF9F93-D774-4C49-9A44-31F3B785B8B6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{459E488E-FF03-4C2A-B497-A052310CDF50}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{459E488E-FF03-4C2A-B497-A052310CDF50}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{459E488E-FF03-4C2A-B497-A052310CDF50}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{459E488E-FF03-4C2A-B497-A052310CDF50}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

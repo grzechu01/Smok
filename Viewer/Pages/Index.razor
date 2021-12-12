@@ -1,0 +1,54 @@
+﻿@page "/"
+
+<PageTitle>Smok</PageTitle>
+
+@using SmokViewer.Data
+@inject MeasurementsService _measurementsService
+
+<h1>Smok</h1>
+
+@if (_measurements == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Temp</th>
+                <th>Pressure</th>
+                <th>Humidity</th>
+                <th>PM1</th>
+                <th>PM2.5</th>
+                <th>PM10</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var measurement in _measurements)
+            {
+                <tr>
+                    <td>@measurement.Date.ToShortDateString()</td>
+                    <td>@measurement.Time.ToShortTimeString()</td>
+                    <td>@measurement.Temperature</td>
+                    <td>@measurement.Pressure</td>
+                    <td>@measurement.Humidity</td>
+                    <td>@measurement.PM1</td>
+                    <td>@measurement.PM25</td>
+                    <td>@measurement.PM10</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IEnumerable<Measurement>? _measurements;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _measurements = await _measurementsService.GetMeasurements();
+    }
+}
