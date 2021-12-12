@@ -17,18 +17,18 @@ namespace SmokViewer.Data
         {
             await using var db = new SqlConnection(_configuration.GetConnectionString("SmokSql"));
 
-            var queryResults = await db.QueryAsync<MeasurementEntity>("SELECT * FROM [dbo].[Measurements] ORDER BY Id DESC");
+            var queryResults = await db.QueryAsync<MeasurementEntity>("SELECT * FROM [dbo].[Measurements] WHERE Timestamp < DATEADD(day, -1, GETDATE()) ORDER BY Id DESC");
 
-            return queryResults.Select(x => new Measurement(
+            return queryResults?.Select(x => new Measurement(
                   Date: DateOnly.FromDateTime(GetLocalTime(x.Timestamp)),
                 Time: TimeOnly.FromDateTime(GetLocalTime(x.Timestamp)),
-                Temperature: string.Format("{0:0.0}", x.Temperature),
-                Humidity: string.Format("{0:0.0}", x.Humidity),
-                Pressure: string.Format("{0:0}", x.Pressure),
-                PM1: string.Format("{0:0}", x.PM1),
-                PM25: string.Format("{0:0}", x.PM25),
-                PM10: string.Format("{0:0}", x.PM10)
-               )).ToArray();
+                Temperature: x.Temperature,
+                Humidity: x.Humidity,
+                Pressure: x.Pressure,
+                PM1: x.PM1,
+                PM25: x.PM25,
+                PM10: x.PM10)
+               ).ToArray() ?? Enumerable.Empty<Measurement>();
         }
 
         private DateTime GetLocalTime(DateTime dateTime) =>

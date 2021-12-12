@@ -1,4 +1,12 @@
 namespace SmokViewer.Data
 {
-    public record Measurement(DateOnly Date, TimeOnly Time, string Temperature, string Pressure, string Humidity, string PM1, string PM25, string PM10);
+    public record Measurement(
+        DateOnly Date, 
+        TimeOnly Time, 
+        double Temperature, 
+        double Pressure, 
+        double Humidity,
+        double PM1,
+        double PM25,
+        double PM10);
 }
