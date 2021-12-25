@@ -17,7 +17,7 @@ namespace SmokViewer.Data
         {
             await using var db = new SqlConnection(_configuration.GetConnectionString("SmokSql"));
 
-            var queryResults = await db.QueryAsync<MeasurementEntity>("SELECT * FROM [dbo].[Measurements] WHERE Timestamp < DATEADD(day, -1, GETDATE()) ORDER BY Id DESC");
+            var queryResults = await db.QueryAsync<MeasurementEntity>("SELECT * FROM [dbo].[Measurements] WHERE Timestamp > DATEADD(day, -7, GETDATE()) ORDER BY Id DESC");
 
             return queryResults?.Select(x => new Measurement(
                   Date: DateOnly.FromDateTime(GetLocalTime(x.Timestamp)),

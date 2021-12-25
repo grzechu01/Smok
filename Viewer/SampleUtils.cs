@@ -30,6 +30,12 @@ namespace SmokViewer
             "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
         });
 
+        public static Color GetRandomColor()
+        {
+            var index = _rng.Next(ChartColors.All.Count - 1);
+            return ChartColors.All[index];
+        }
+
         private static int RandomScalingFactorThreadUnsafe() => _rng.Next(-100, 100);
 
         public static int RandomScalingFactor()

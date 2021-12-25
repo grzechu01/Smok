@@ -3,15 +3,34 @@
 <PageTitle>Smok</PageTitle>
 
 @using SmokViewer.Data
+@using SmokViewer.Pages.Charts
 @inject MeasurementsService _measurementsService
 
 <h1>Smok</h1>
 
 
+<label class="container">
+    24 hours
+    <input type="radio" id="timescale-option-24h" name="TimeScaleOptions" value="Option24h" @onchange="@TimeScaleUpdated" checked="checked" />
+    <span class="checkmark"></span>
+</label>
 
-<SmokViewer.Pages.Charts.LineChart Measurements="@_measurements" />
+<label class="container">
+    3 days
+    <input type="radio" id="timescale-option-3d" name="TimeScaleOptions" value="Option3d" @onchange="@TimeScaleUpdated" />
+    <span class="checkmark"></span>
+</label>
 
 
+<label class="container">
+    7 days
+    <input type="radio" id="timescale-option-7d" name="TimeScaleOptions" value="Option7d" @onchange="@TimeScaleUpdated" />
+    <span class="checkmark"></span>
+</label>
+
+
+<SmokViewer.Pages.Charts.LineChart @ref="_childComponent" />
+<SmokViewer.Pages.Charts.LineChart @ref="_pmComponent" />
 
 <button @onclick="@ToggleShowDetails">Show details</button>
 
@@ -58,26 +77,42 @@
 @code {
     private IEnumerable<Measurement> _measurements = Enumerable.Empty<Measurement>();
 
+    private LineChart _childComponent;
+    private LineChart _pmComponent;
+
+    private TimeScaleOptions TimeScale { get; set; } = TimeScaleOptions.Option24h;
+
+    private void TimeScaleUpdated(ChangeEventArgs e)
+    {
+        TimeScale = Enum.Parse<TimeScaleOptions>(e?.Value?.ToString());
+        _childComponent.UpdateChart(TimeScale);
+        _pmComponent.UpdateChart(TimeScale);
+    }
+
     private bool _showDetails = false;
     private void ToggleShowDetails() => _showDetails = !_showDetails;
-
-    //private IEnumerable<(DateTime X, double Y)> GetDataForTempChart()
-    //{
-    //    return _measurements.Select(x =>
-    //        (new DateTime(
-    //            x.Date.Year,
-    //            x.Date.Month,
-    //            x.Date.Day,
-    //            x.Time.Hour,
-    //            x.Time.Minute,
-    //            x.Time.Second),
-    //        x.Temperature)).ToArray();
-
-    //}
 
     protected override async Task OnInitializedAsync()
     {
         _measurements = await _measurementsService.GetMeasurements();
-        StateHasChanged();
+        var temp = new MeasurementsDataSet("temperature", SampleUtils.ChartColors.Green, _measurements.Select(x => (date: GetDateTimeFromMeasurement(x), x.Temperature)).ToList());
+
+        _childComponent.UpdateChartData(new[] { temp });
+
+        var pm1 = new MeasurementsDataSet("PM1", SampleUtils.ChartColors.Red, _measurements.Select(x => (date: GetDateTimeFromMeasurement(x), x.PM1)).ToList());
+        var pm25 = new MeasurementsDataSet("PM2.5", SampleUtils.ChartColors.Blue, _measurements.Select(x => (date: GetDateTimeFromMeasurement(x), x.PM25)).ToList());
+        var pm10 = new MeasurementsDataSet("PM10", SampleUtils.ChartColors.Purple, _measurements.Select(x => (date: GetDateTimeFromMeasurement(x), x.PM10)).ToList());
+        _pmComponent.UpdateChartData(new[] { pm1, pm25, pm10 });
+    }
+
+    private DateTime GetDateTimeFromMeasurement(Measurement m)
+    {
+        return new DateTime(
+            m.Date.Year,
+            m.Date.Month,
+            m.Date.Day,
+            m.Time.Hour,
+            m.Time.Minute,
+            m.Time.Second);
     }
 }
