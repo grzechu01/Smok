@@ -1,118 +1,318 @@
 ﻿@page "/"
-
-<PageTitle>Smok</PageTitle>
-
+@using System.Globalization
 @using SmokViewer.Data
-@using SmokViewer.Pages.Charts
-@inject MeasurementsService _measurementsService
+@implements IDisposable
+@inject MeasurementsService Measurements
+@inject NavigationManager Navigation
+@inject ILogger<Index> Logger
 
-<h1>Smok</h1>
+<PageTitle>Smok — jakość powietrza</PageTitle>
 
+<header class="topbar">
+    <div class="topbar-inner">
+        <a class="brand" href="">
+            <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M6 20c0-5 4-9 9-9 1-4 5-6 9-5-2 1-3 3-3 5 3 1 5 4 5 7 0 4-3 7-7 7H12c-3 0-6-2-6-5z" /></svg>
+            <span>
+                <span class="brand-name">Smok</span>
+                <span class="brand-sub">stacja pomiaru powietrza</span>
+            </span>
+        </a>
+        <p class="sensor-status @SensorStatusClass" role="status">
+            <span class="status-dot" aria-hidden="true"></span>
+            @SensorStatusText
+        </p>
+    </div>
+</header>
 
-<label class="container">
-    24 hours
-    <input type="radio" id="timescale-option-24h" name="TimeScaleOptions" value="Option24h" @onchange="@TimeScaleUpdated" checked="checked" />
-    <span class="checkmark"></span>
-</label>
+<main class="page">
+    <section class="section" aria-labelledby="now-title">
+        <h1 id="now-title" class="section-title" tabindex="-1">Teraz</h1>
+        <CurrentConditions Latest="_latest" Error="@_latestError" OnRetry="LoadLatestAsync" />
+    </section>
 
-<label class="container">
-    3 days
-    <input type="radio" id="timescale-option-3d" name="TimeScaleOptions" value="Option3d" @onchange="@TimeScaleUpdated" />
-    <span class="checkmark"></span>
-</label>
-
-
-<label class="container">
-    7 days
-    <input type="radio" id="timescale-option-7d" name="TimeScaleOptions" value="Option7d" @onchange="@TimeScaleUpdated" />
-    <span class="checkmark"></span>
-</label>
-
-
-<SmokViewer.Pages.Charts.LineChart @ref="_childComponent" />
-<SmokViewer.Pages.Charts.LineChart @ref="_pmComponent" />
-
-<button @onclick="@ToggleShowDetails">Show details</button>
-
-@if (_showDetails)
-{
-    @if (_measurements == null)
-    {
-        <p><em>Loading...</em></p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Time</th>
-                    <th>Temp</th>
-                    <th>Pressure</th>
-                    <th>Humidity</th>
-                    <th>PM1</th>
-                    <th>PM2.5</th>
-                    <th>PM10</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var measurement in _measurements)
+    <section class="section" aria-labelledby="history-title">
+        <div class="section-head">
+            <h2 id="history-title" class="section-title">Historia</h2>
+            <p class="section-meta">
+                @Display.RangeLabel(_range)
+                @if (_series is not null)
                 {
-                    <tr>
-                        <td>@measurement.Date.ToShortDateString()</td>
-                        <td>@measurement.Time.ToShortTimeString()</td>
-                        <td>@string.Format("{0:0.0}", measurement.Temperature)</td>
-                        <td>@string.Format("{0:0}", measurement.Pressure)</td>
-                        <td>@string.Format("{0:0.0}", measurement.Humidity)</td>
-                        <td>@string.Format("{0:0}", measurement.PM1)</td>
-                        <td>@string.Format("{0:0}", measurement.PM25)</td>
-                        <td>@string.Format("{0:0}",measurement.PM10)</td>
-                    </tr>
+                    <span> · @_series.Resolution.Description</span>
                 }
-            </tbody>
-        </table>
-    }
-}
+            </p>
+        </div>
+
+        <div class="toolbar">
+            <nav class="segmented" aria-label="Zakres czasu">
+                @foreach (var (preset, key, label) in Presets)
+                {
+                    <a href="@($"?zakres={key}")" class="segment" aria-current="@(_range.Preset == preset && !_customOpen ? "page" : null)">@label</a>
+                }
+                <button type="button" class="segment" aria-expanded="@(_customOpen ? "true" : "false")" aria-current="@(_range.Preset == RangePreset.Custom || _customOpen ? "page" : null)" @onclick="ToggleCustom">Własny…</button>
+            </nav>
+        </div>
+
+        @if (_customOpen)
+        {
+            <form class="custom-range card" @onsubmit="ApplyCustom" @onsubmit:preventDefault>
+                <label>
+                    <span>Od</span>
+                    <input type="date" @bind="_customFrom" min="@FirstDay.ToString("yyyy-MM-dd")" max="@Today.ToString("yyyy-MM-dd")" required />
+                </label>
+                <label>
+                    <span>Do</span>
+                    <input type="date" @bind="_customTo" min="@FirstDay.ToString("yyyy-MM-dd")" max="@Today.ToString("yyyy-MM-dd")" required />
+                </label>
+                <button type="submit" class="button button-primary">Pokaż</button>
+                @if (_customMessage is not null)
+                {
+                    <p class="form-error" role="alert">@_customMessage</p>
+                }
+            </form>
+        }
+
+        @if (_seriesError is not null)
+        {
+            <div class="card error-card" role="alert">
+                <p><strong>Nie udało się pobrać danych.</strong> @_seriesError</p>
+                <button class="button" @onclick="() => LoadSeriesAsync()">Spróbuj ponownie</button>
+            </div>
+        }
+
+        <div class="charts">
+            <TimeSeriesChart Title="Pył zawieszony" Series="ParticulateSeries" Data="_series" Busy="_seriesLoading" ZeroBased="true" References="ParticulateReferences" />
+            <div class="chart-grid">
+                <TimeSeriesChart Title="Temperatura" Series="new[] { Display.Temperature }" Data="_series" Busy="_seriesLoading" Band="true" />
+                <TimeSeriesChart Title="Wilgotność" Series="new[] { Display.Humidity }" Data="_series" Busy="_seriesLoading" Band="true" />
+                <TimeSeriesChart Title="Ciśnienie" Series="new[] { Display.Pressure }" Data="_series" Busy="_seriesLoading" Band="true" />
+            </div>
+        </div>
+
+        <DataTable Data="_series" />
+    </section>
+</main>
+
+<footer class="footer">
+    <p>Czasy w strefie Europe/Warsaw. Ocena jakości powietrza wg indeksu GIOŚ (średnie 1-godzinne); linie przerywane na wykresie pyłów to wytyczne WHO 2021 dla średnich dobowych.</p>
+</footer>
 
 @code {
-    private IEnumerable<Measurement> _measurements = Enumerable.Empty<Measurement>();
-
-    private LineChart _childComponent;
-    private LineChart _pmComponent;
-
-    private TimeScaleOptions TimeScale { get; set; } = TimeScaleOptions.Option24h;
-
-    private void TimeScaleUpdated(ChangeEventArgs e)
+    private static readonly (RangePreset Preset, string Key, string Label)[] Presets =
     {
-        TimeScale = Enum.Parse<TimeScaleOptions>(e?.Value?.ToString());
-        _childComponent.UpdateChart(TimeScale);
-        _pmComponent.UpdateChart(TimeScale);
+        (RangePreset.Day, "24h", "24 h"),
+        (RangePreset.Week, "7d", "7 dni"),
+        (RangePreset.Month, "30d", "30 dni"),
+        (RangePreset.Year, "1r", "Rok")
+    };
+
+    // First reading in the database; custom ranges cannot start earlier.
+    private static readonly DateOnly FirstDay = new(2021, 12, 5);
+
+    private static readonly IReadOnlyList<MetricInfo> ParticulateSeries = new[] { Display.PM25, Display.PM10, Display.PM1 };
+
+    private static readonly IReadOnlyList<TimeSeriesChart.ReferenceLine> ParticulateReferences = new[]
+    {
+        new TimeSeriesChart.ReferenceLine(AirQuality.WhoPM25Daily, "WHO PM2.5"),
+        new TimeSeriesChart.ReferenceLine(AirQuality.WhoPM10Daily, "WHO PM10")
+    };
+
+    [SupplyParameterFromQuery(Name = "zakres")] public string? RangeKey { get; set; }
+    [SupplyParameterFromQuery(Name = "od")] public string? CustomFromParam { get; set; }
+    [SupplyParameterFromQuery(Name = "do")] public string? CustomToParam { get; set; }
+
+    private TimeRange _range = TimeRange.ForPreset(RangePreset.Day, DateTime.UtcNow);
+    private (DateOnly From, DateOnly To)? _customDays;
+
+    private LatestReading? _latest;
+    private string? _latestError;
+
+    private SeriesResult? _series;
+    private bool _seriesLoading = true;
+    private string? _seriesError;
+
+    private bool _customOpen;
+    private DateOnly _customFrom;
+    private DateOnly _customTo;
+    private string? _customMessage;
+
+    private bool _interactive;
+    private DateTime _nowUtc = DateTime.UtcNow;
+    private CancellationTokenSource? _seriesCts;
+    private readonly CancellationTokenSource _disposed = new();
+
+    private DateOnly Today => Warsaw.Today(_nowUtc);
+
+    protected override void OnParametersSet()
+    {
+        _customDays = ParseCustom();
+        _range = CurrentRange();
+        _customOpen = _customDays is not null;
+        if (_customDays is { } days)
+            (_customFrom, _customTo) = days;
+
+        // Data is fetched only once the circuit is live (OnAfterRenderAsync): the prerendered page is the
+        // instant shell with placeholders, and the database is queried once per visit rather than twice.
+        if (_interactive)
+            _ = LoadSeriesAsync();
     }
 
-    private bool _showDetails = false;
-    private void ToggleShowDetails() => _showDetails = !_showDetails;
-
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _measurements = await _measurementsService.GetMeasurements();
-        var temp = new MeasurementsDataSet("temperature", SampleUtils.ChartColors.Green, _measurements.Select(x => (date: GetDateTimeFromMeasurement(x), x.Temperature)).ToList());
+        if (!firstRender)
+            return;
 
-        _childComponent.UpdateChartData(new[] { temp });
-
-        var pm1 = new MeasurementsDataSet("PM1", SampleUtils.ChartColors.Red, _measurements.Select(x => (date: GetDateTimeFromMeasurement(x), x.PM1)).ToList());
-        var pm25 = new MeasurementsDataSet("PM2.5", SampleUtils.ChartColors.Blue, _measurements.Select(x => (date: GetDateTimeFromMeasurement(x), x.PM25)).ToList());
-        var pm10 = new MeasurementsDataSet("PM10", SampleUtils.ChartColors.Purple, _measurements.Select(x => (date: GetDateTimeFromMeasurement(x), x.PM10)).ToList());
-        _pmComponent.UpdateChartData(new[] { pm1, pm25, pm10 });
+        _interactive = true;
+        _ = LoadSeriesAsync();
+        await LoadLatestAsync();
+        _ = RefreshLoopAsync();
     }
 
-    private DateTime GetDateTimeFromMeasurement(Measurement m)
+    private (DateOnly, DateOnly)? ParseCustom()
     {
-        return new DateTime(
-            m.Date.Year,
-            m.Date.Month,
-            m.Date.Day,
-            m.Time.Hour,
-            m.Time.Minute,
-            m.Time.Second);
+        if (!DateOnly.TryParseExact(CustomFromParam, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from) ||
+            !DateOnly.TryParseExact(CustomToParam, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var to))
+            return null;
+
+        if (from > to)
+            (from, to) = (to, from);
+        if (from < FirstDay)
+            from = FirstDay;
+        if (to > Today)
+            to = Today;
+        return from <= to ? (from, to) : null;
+    }
+
+    private TimeRange CurrentRange()
+    {
+        if (_customDays is { } days)
+            return TimeRange.ForDays(days.From, days.To);
+
+        var preset = Presets.FirstOrDefault(p => p.Key == RangeKey).Preset;
+        return TimeRange.ForPreset(preset, _nowUtc);
+    }
+
+    private async Task LoadLatestAsync()
+    {
+        try
+        {
+            _latest = await Measurements.GetLatestAsync(_disposed.Token);
+            _latestError = _latest is null ? "Baza nie zawiera jeszcze pomiarów." : null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Loading the latest reading failed");
+            _latestError = "Sprawdź połączenie i spróbuj ponownie.";
+        }
+        _nowUtc = DateTime.UtcNow;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadSeriesAsync()
+    {
+        // A newer selection supersedes a query still in flight.
+        _seriesCts?.Cancel();
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(_disposed.Token);
+        _seriesCts = cts;
+
+        _seriesLoading = true;
+        _seriesError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var series = await Measurements.GetSeriesAsync(_range, cts.Token);
+            if (cts.IsCancellationRequested)
+                return;
+            _series = series;
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading measurements for {From}–{To} failed", _range.FromUtc, _range.ToUtc);
+            _seriesError = "Sprawdź połączenie i spróbuj ponownie.";
+            // Never leave the previous range on screen under the new range's label.
+            _series = null;
+        }
+
+        _seriesLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Keeps "x min temu" current and pulls new readings while the page stays open.</summary>
+    private async Task RefreshLoopAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        var ticks = 0;
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_disposed.Token))
+            {
+                _nowUtc = DateTime.UtcNow;
+                if (++ticks % 5 == 0)
+                {
+                    await LoadLatestAsync();
+                    if (_range.Preset != RangePreset.Custom)
+                    {
+                        _range = CurrentRange();
+                        await LoadSeriesAsync();
+                    }
+                }
+                else
+                {
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Page closed.
+        }
+    }
+
+    private void ToggleCustom()
+    {
+        _customOpen = !_customOpen;
+        _customMessage = null;
+        if (_customOpen && _customDays is null)
+        {
+            _customTo = Today;
+            _customFrom = Today.AddDays(-13);
+        }
+    }
+
+    private void ApplyCustom()
+    {
+        if (_customFrom > _customTo)
+        {
+            _customMessage = "Data początkowa musi być wcześniejsza niż końcowa.";
+            return;
+        }
+        _customMessage = null;
+        Navigation.NavigateTo($"?od={_customFrom:yyyy-MM-dd}&do={_customTo:yyyy-MM-dd}");
+    }
+
+    private string SensorStatusClass => _latest is null
+        ? "is-unknown"
+        : (_nowUtc - _latest.TimestampUtc) switch
+        {
+            var age when age <= TimeSpan.FromMinutes(25) => "is-live",
+            var age when age <= TimeSpan.FromMinutes(60) => "is-late",
+            _ => "is-offline"
+        };
+
+    private string SensorStatusText => _latest is null
+        ? (_latestError is null ? "Łączenie…" : "Brak danych")
+        : SensorStatusClass switch
+        {
+            "is-offline" => $"Czujnik nie wysyła danych · ostatni pomiar {Display.Ago(_latest.TimestampUtc, _nowUtc)}",
+            _ => $"Ostatni pomiar {Display.Time(_latest.TimestampUtc)} · {Display.Ago(_latest.TimestampUtc, _nowUtc)}"
+        };
+
+    public void Dispose()
+    {
+        _disposed.Cancel();
     }
 }

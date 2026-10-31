@@ -1,0 +1,57 @@
+@using SmokViewer.Data
+
+<div class="now-grid" aria-busy="@(Latest is null && Error is null ? "true" : "false")">
+    @if (Error is not null)
+    {
+        <div class="card error-card" role="alert">
+            <p><strong>Nie udało się pobrać ostatniego pomiaru.</strong> @Error</p>
+            <button class="button" @onclick="OnRetry">Spróbuj ponownie</button>
+        </div>
+    }
+    else if (Latest is null)
+    {
+        <div class="card aq-card"><div class="skeleton skeleton-block"></div></div>
+        @for (var i = 0; i < 3; i++)
+        {
+            <div class="card stat-card"><div class="skeleton skeleton-line short"></div><div class="skeleton skeleton-value"></div></div>
+        }
+    }
+    else
+    {
+        var level = AirQuality.Overall(Latest.PM25Hour, Latest.PM10Hour);
+        <article class="card aq-card @level.StatusClass()">
+            <div class="aq-head">
+                <span class="status-badge"><span class="status-icon" aria-hidden="true"></span>Jakość powietrza: @level.Label().ToLowerInvariant()</span>
+            </div>
+            <p class="aq-advice">@level.Advice()</p>
+            <dl class="aq-values">
+                <div>
+                    <dt>PM2.5</dt>
+                    <dd><span class="series-key" style="--key: var(@Display.PM25.ColorVar)"></span>@Display.Number(Latest.PM25Hour, 0) <small>µg/m³</small></dd>
+                    <dd class="aq-level">@AirQuality.ForPM25(Latest.PM25Hour).Label()</dd>
+                </div>
+                <div>
+                    <dt>PM10</dt>
+                    <dd><span class="series-key" style="--key: var(@Display.PM10.ColorVar)"></span>@Display.Number(Latest.PM10Hour, 0) <small>µg/m³</small></dd>
+                    <dd class="aq-level">@AirQuality.ForPM10(Latest.PM10Hour).Label()</dd>
+                </div>
+                <div>
+                    <dt>PM1</dt>
+                    <dd><span class="series-key" style="--key: var(@Display.PM1.ColorVar)"></span>@Display.Number(Latest.PM1Hour, 0) <small>µg/m³</small></dd>
+                    <dd class="aq-level">bez normy</dd>
+                </div>
+            </dl>
+            <p class="card-foot">Średnie z ostatniej godziny · indeks jakości powietrza GIOŚ</p>
+        </article>
+
+        <StatCard Metric="Display.Temperature" Value="Latest.Weather?.Temperature" HourAgo="Latest.WeatherHourAgo?.Temperature" />
+        <StatCard Metric="Display.Humidity" Value="Latest.Weather?.Humidity" HourAgo="Latest.WeatherHourAgo?.Humidity" />
+        <StatCard Metric="Display.Pressure" Value="Latest.Weather?.Pressure" HourAgo="Latest.WeatherHourAgo?.Pressure" />
+    }
+</div>
+
+@code {
+    [Parameter] public LatestReading? Latest { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+}

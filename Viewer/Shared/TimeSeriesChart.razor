@@ -1,0 +1,139 @@
+@using SmokViewer.Data
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<section class="card chart-card @(Busy && Data is not null ? "is-refreshing" : null)" aria-busy="@(Busy ? "true" : "false")">
+    <header class="card-head">
+        <h3 class="card-title">@Title</h3>
+        @if (HasData)
+        {
+            <p class="card-meta">@Summary()</p>
+        }
+    </header>
+    <div class="chart-body">
+        @if (Data is null)
+        {
+            if (Busy)
+            {
+                <div class="skeleton chart-skeleton" aria-hidden="true"></div>
+            }
+            else
+            {
+                <p class="empty">Brak danych do wyświetlenia.</p>
+            }
+        }
+        else if (!HasData)
+        {
+            <p class="empty">Brak pomiarów w tym okresie.</p>
+        }
+        <canvas @ref="_canvas" role="img" aria-label="@($"Wykres: {Title}. Wartości są w tabeli danych poniżej.")" hidden="@(!HasData)"></canvas>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<MetricInfo> Series { get; set; } = Array.Empty<MetricInfo>();
+    [Parameter] public SeriesResult? Data { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    /// <summary>Shade the min–max spread of each bucket behind the mean line.</summary>
+    [Parameter] public bool Band { get; set; }
+    [Parameter] public bool ZeroBased { get; set; }
+    [Parameter] public IReadOnlyList<ReferenceLine> References { get; set; } = Array.Empty<ReferenceLine>();
+
+    public sealed record ReferenceLine(double Value, string Label);
+
+    private ElementReference _canvas;
+    private IJSObjectReference? _module;
+    private SeriesResult? _rendered;
+
+    private bool HasData => Data is not null && Data.Points.Any(p => Series.Any(s => p[s.Metric] is not null));
+
+    private string Summary()
+    {
+        var points = Data!.Points;
+        double Mean(Metric m) => points.Sum(p => (p[m]?.Avg ?? 0) * p.CountOf(m)) / points.Sum(p => p.CountOf(m));
+
+        if (Series.Count > 1)
+            return "średnio: " + string.Join(" · ", Series.Select(s => $"{s.Label} {Display.Number(Mean(s.Metric), s.Decimals)}")) + $" {Series[0].Unit}";
+
+        var metric = Series[0];
+        return $"średnio {metric.Value(Mean(metric.Metric))} · min {Display.Number(points.Min(p => p[metric.Metric]?.Min ?? double.MaxValue), metric.Decimals)} · maks {Display.Number(points.Max(p => p[metric.Metric]?.Max ?? double.MinValue), metric.Decimals)}";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ReferenceEquals(Data, _rendered))
+            return;
+        _rendered = Data;
+
+        _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/charts.js");
+        if (HasData)
+            await _module.InvokeVoidAsync("render", _canvas, BuildPayload(Data!));
+        else
+            await _module.InvokeVoidAsync("destroy", _canvas);
+    }
+
+    private object BuildPayload(SeriesResult data)
+    {
+        var bucket = data.Resolution.BucketMinutes;
+        // Readings arrive every ~10 min; a longer silence (or a whole missing bucket) is drawn as a break in the line.
+        var gap = TimeSpan.FromMinutes(bucket == 0 ? 35 : bucket * 2 + 1);
+
+        var times = new List<long>();
+        var rows = new List<SeriesPoint?>();
+        DateTime? previous = null;
+        foreach (var point in data.Points)
+        {
+            if (previous is { } prev && point.TimeUtc - prev > gap)
+            {
+                times.Add(ToMs(prev.AddMinutes(Math.Max(bucket, 10))));
+                rows.Add(null);
+            }
+            times.Add(ToMs(point.TimeUtc));
+            rows.Add(point);
+            previous = point.TimeUtc;
+        }
+
+        double?[] Values(Metric metric, Func<Stat, double> pick, int decimals) =>
+            rows.Select(r => r?[metric] is { } stat ? Math.Round(pick(stat), decimals + 1) : (double?)null).ToArray();
+
+        var nowUtc = DateTime.UtcNow;
+        return new
+        {
+            t = times,
+            from = ToMs(data.Range.FromUtc),
+            to = ToMs(data.Range.ToUtc < nowUtc ? data.Range.ToUtc : nowUtc),
+            bucketMinutes = bucket,
+            unit = Series[0].Unit,
+            decimals = Series[0].Decimals,
+            band = Band && !data.Resolution.IsRaw,
+            zeroBased = ZeroBased,
+            references = References.Select(r => new { value = r.Value, label = r.Label }),
+            series = Series.Select(s => new
+            {
+                label = s.Label,
+                color = s.ColorVar,
+                avg = Values(s.Metric, x => x.Avg, s.Decimals),
+                min = Values(s.Metric, x => x.Min, s.Decimals),
+                max = Values(s.Metric, x => x.Max, s.Decimals)
+            })
+        };
+    }
+
+    private static long ToMs(DateTime utc) => new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null)
+            return;
+        try
+        {
+            await _module.InvokeVoidAsync("destroy", _canvas);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit is gone together with the page; nothing left to clean up.
+        }
+    }
+}

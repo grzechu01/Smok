@@ -1,0 +1,125 @@
+@using System.Text
+@using SmokViewer.Data
+@inject IJSRuntime JS
+
+<section class="card table-card">
+    <header class="card-head table-head">
+        <div>
+            <h3 class="card-title">Dane</h3>
+            <p class="card-meta">@Meta()</p>
+        </div>
+        <div class="table-actions">
+            <button class="button button-ghost" @onclick="DownloadCsv" disabled="@(Data is not { Points.Count: > 0 })">Pobierz CSV</button>
+            <button class="button" @onclick="() => _open = !_open" aria-expanded="@(_open ? "true" : "false")" aria-controls="data-table">
+                @(_open ? "Ukryj tabelę" : "Pokaż tabelę")
+            </button>
+        </div>
+    </header>
+
+    @if (_open && Data is { Points.Count: > 0 })
+    {
+        <div class="table-scroll" id="data-table" tabindex="0">
+            <table class="data-table">
+                <caption class="visually-hidden">Pomiary w wybranym okresie, od najnowszych</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Czas</th>
+                        @foreach (var metric in Display.All)
+                        {
+                            <th scope="col" class="num">@metric.ShortLabel <span class="unit">@metric.Unit</span></th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var point in Data.Points.Reverse().Take(_visibleRows))
+                    {
+                        <tr>
+                            <th scope="row">@Display.Bucket(point.TimeUtc, Data.Resolution)</th>
+                            @foreach (var metric in Display.All)
+                            {
+                                if (point[metric.Metric] is { } stat)
+                                {
+                                    <td class="num" title="@(Data.Resolution.IsRaw ? null : $"min {Display.Number(stat.Min, metric.Decimals)} · maks {Display.Number(stat.Max, metric.Decimals)}")">
+                                        @Display.Number(stat.Avg, metric.Decimals)
+                                    </td>
+                                }
+                                else
+                                {
+                                    <td class="num missing" title="Brak wiarygodnego odczytu">—</td>
+                                }
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Data.Points.Count > _visibleRows)
+        {
+            <div class="table-more">
+                <button class="button button-ghost" @onclick="() => _visibleRows += PageSize">Pokaż więcej (@(Data.Points.Count - _visibleRows))</button>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private const int PageSize = 100;
+
+    [Parameter] public SeriesResult? Data { get; set; }
+
+    private bool _open;
+    private int _visibleRows = PageSize;
+    private SeriesResult? _shown;
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(Data, _shown))
+        {
+            _shown = Data;
+            _visibleRows = PageSize;
+        }
+    }
+
+    private string Meta()
+    {
+        if (Data is null)
+            return "Ładowanie…";
+        var meta = $"{Data.Points.Count} wierszy · {Data.Resolution.Description}";
+        var rejected = Data.Points.Sum(p => p.Count - p.WeatherCount);
+        return rejected > 0 ? $"{meta} · pominięto {rejected} błędnych odczytów temperatury, wilgotności i ciśnienia" : meta;
+    }
+
+    private async Task DownloadCsv()
+    {
+        if (Data is null)
+            return;
+
+        var csv = new StringBuilder();
+        var raw = Data.Resolution.IsRaw;
+        csv.Append("czas_od (Europe/Warsaw);liczba_pomiarow");
+        foreach (var metric in Display.All)
+            csv.Append(raw ? $";{metric.Metric}" : $";{metric.Metric}_sr;{metric.Metric}_min;{metric.Metric}_max");
+        csv.AppendLine();
+
+        foreach (var point in Data.Points)
+        {
+            csv.Append(Warsaw.ToLocal(point.TimeUtc).ToString("yyyy-MM-dd HH:mm")).Append(';').Append(point.Count);
+            foreach (var metric in Display.All)
+            {
+                var stat = point[metric.Metric];
+                csv.Append(';').Append(Csv(stat?.Avg, metric));
+                if (!raw)
+                    csv.Append(';').Append(Csv(stat?.Min, metric)).Append(';').Append(Csv(stat?.Max, metric));
+            }
+            csv.AppendLine();
+        }
+
+        var from = Warsaw.ToLocal(Data.Range.FromUtc).ToString("yyyy-MM-dd");
+        var to = Warsaw.ToLocal(Data.Range.ToUtc).ToString("yyyy-MM-dd");
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/charts.js");
+        await module.InvokeVoidAsync("download", $"smok_{from}_{to}.csv", csv.ToString(), "text/csv;charset=utf-8");
+    }
+
+    // Polish Excel expects ';' between fields and ',' as the decimal mark, without digit grouping.
+    private static string Csv(double? value, MetricInfo metric) => value?.ToString("F" + (metric.Decimals + 1), Display.Culture) ?? "";
+}

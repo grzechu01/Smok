@@ -1,0 +1,35 @@
+@using SmokViewer.Data
+
+<article class="card stat-card">
+    <h3 class="stat-label"><span class="series-key" style="--key: var(@Metric.ColorVar)" aria-hidden="true"></span>@Metric.Label</h3>
+    @if (Value is not { } value)
+    {
+        <p class="stat-value is-missing">—</p>
+        <p class="stat-trend">brak wiarygodnego odczytu w ostatniej godzinie</p>
+    }
+    else
+    {
+        <p class="stat-value">@Display.Number(value, Metric.Decimals)<span class="stat-unit">@Metric.Unit</span></p>
+        @if (HourAgo is { } before)
+        {
+            var delta = Math.Round(value - before, Metric.Decimals);
+            <p class="stat-trend" title="Zmiana względem pomiaru sprzed godziny">
+                @if (delta == 0)
+                {
+                    <span>bez zmian od godziny</span>
+                }
+                else
+                {
+                    <span aria-hidden="true">@(delta > 0 ? "↑" : "↓")</span>
+                    <span>@(delta > 0 ? "+" : "−")@Display.Number(Math.Abs(delta), Metric.Decimals) @Metric.Unit w 1 h</span>
+                }
+            </p>
+        }
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public MetricInfo Metric { get; set; } = default!;
+    [Parameter] public double? Value { get; set; }
+    [Parameter] public double? HourAgo { get; set; }
+}
