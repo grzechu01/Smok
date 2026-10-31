@@ -1,9 +1,3 @@
-﻿namespace SmokViewer.Pages.Charts
-{
-    public class ChartModel
-    {
-        public string TemperatureScale { get; set; }
+﻿namespace SmokViewer.Pages.Charts;
 
-        public string PMScale { get; set; }
-    }
-}
+public record ChartModel(string TemperatureScale, string PMScale);
