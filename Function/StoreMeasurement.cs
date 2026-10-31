@@ -14,7 +14,8 @@ namespace Smok
 {
     public static class StoreMeasurement
     {
-        private const string ConnectionString = "Server=tcp:smok-database-server.database.windows.net,1433;Initial Catalog=smok-database;Persist Security Info=False;User ID=smok;Password=4987dd70-5cdc-4c1f-adc9-166b1972917c;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+        private static readonly string ConnectionString = Environment.GetEnvironmentVariable("SmokSql")
+            ?? throw new InvalidOperationException("Missing 'SmokSql' app setting.");
         private const string InsertSql = "INSERT INTO [dbo].[Measurements] " +
             "([Timestamp] ,[Temperature] ,[Humidity] ,[Pressure] ,[PM1] ,[PM25] ,[PM10]) " +
             "VALUES(@timestamp, @temp, @humidity, @pressure, @pm1, @pm25, @pm10); ";

@@ -268,3 +268,6 @@ _Pvt_Extensions
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Azure Functions local settings (secrets)
+local.settings.json
