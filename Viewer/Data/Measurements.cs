@@ -46,5 +46,11 @@ namespace SmokViewer.Data
         // Particulate readings jump between samples; the air-quality index is defined on 1 h means.
         double PM1Hour,
         double PM25Hour,
-        double PM10Hour);
+        double PM10Hour)
+    {
+        /// <summary>After this long without a reading the values no longer describe the air outside.</summary>
+        public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(60);
+
+        public bool IsStale(DateTime nowUtc) => nowUtc - TimestampUtc > StaleAfter;
+    }
 }

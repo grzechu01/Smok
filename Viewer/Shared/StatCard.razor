@@ -7,6 +7,11 @@
         <p class="stat-value is-missing">—</p>
         <p class="stat-trend">brak wiarygodnego odczytu w ostatniej godzinie</p>
     }
+    else if (MeasuredAtUtc is { } measuredAt)
+    {
+        <p class="stat-value is-missing">@Display.Number(value, Metric.Decimals)<span class="stat-unit">@Metric.Unit</span></p>
+        <p class="stat-trend">nieaktualne · pomiar z @Display.Timestamp(measuredAt)</p>
+    }
     else
     {
         <p class="stat-value">@Display.Number(value, Metric.Decimals)<span class="stat-unit">@Metric.Unit</span></p>
@@ -32,4 +37,6 @@
     [Parameter, EditorRequired] public MetricInfo Metric { get; set; } = default!;
     [Parameter] public double? Value { get; set; }
     [Parameter] public double? HourAgo { get; set; }
+    /// <summary>Set when the reading is stale; the value is then shown greyed out with its time.</summary>
+    [Parameter] public DateTime? MeasuredAtUtc { get; set; }
 }

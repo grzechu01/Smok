@@ -19,11 +19,26 @@
     else
     {
         var level = AirQuality.Overall(Latest.PM25Hour, Latest.PM10Hour);
-        <article class="card aq-card @level.StatusClass()">
+        var stale = Latest.IsStale(NowUtc);
+        <article class="card aq-card @(stale ? "is-stale" : level.StatusClass())">
             <div class="aq-head">
-                <span class="status-badge"><span class="status-icon" aria-hidden="true"></span>Jakość powietrza: @level.Label().ToLowerInvariant()</span>
+                @if (stale)
+                {
+                    <span class="status-badge">Brak aktualnych danych</span>
+                }
+                else
+                {
+                    <span class="status-badge"><span class="status-icon" aria-hidden="true"></span>Jakość powietrza: @level.Label().ToLowerInvariant()</span>
+                }
             </div>
-            <p class="aq-advice">@level.Advice()</p>
+            @if (stale)
+            {
+                <p class="aq-advice">Czujnik nie wysyła danych od @Display.Timestamp(Latest.TimestampUtc). Poniżej ostatnie znane wartości — nie opisują obecnego stanu powietrza.</p>
+            }
+            else
+            {
+                <p class="aq-advice">@level.Advice()</p>
+            }
             <dl class="aq-values">
                 <div>
                     <dt>PM2.5</dt>
@@ -41,17 +56,20 @@
                     <dd class="aq-level">bez normy</dd>
                 </div>
             </dl>
-            <p class="card-foot">Średnie z ostatniej godziny · indeks jakości powietrza GIOŚ</p>
+            <p class="card-foot">@(stale ? "Średnie z ostatniej godziny pomiarów" : "Średnie z ostatniej godziny") · indeks jakości powietrza GIOŚ</p>
         </article>
 
-        <StatCard Metric="Display.Temperature" Value="Latest.Weather?.Temperature" HourAgo="Latest.WeatherHourAgo?.Temperature" />
-        <StatCard Metric="Display.Humidity" Value="Latest.Weather?.Humidity" HourAgo="Latest.WeatherHourAgo?.Humidity" />
-        <StatCard Metric="Display.Pressure" Value="Latest.Weather?.Pressure" HourAgo="Latest.WeatherHourAgo?.Pressure" />
+        <StatCard Metric="Display.Temperature" Value="Latest.Weather?.Temperature" HourAgo="Latest.WeatherHourAgo?.Temperature" MeasuredAtUtc="StaleTime(stale)" />
+        <StatCard Metric="Display.Humidity" Value="Latest.Weather?.Humidity" HourAgo="Latest.WeatherHourAgo?.Humidity" MeasuredAtUtc="StaleTime(stale)" />
+        <StatCard Metric="Display.Pressure" Value="Latest.Weather?.Pressure" HourAgo="Latest.WeatherHourAgo?.Pressure" MeasuredAtUtc="StaleTime(stale)" />
     }
 </div>
 
 @code {
     [Parameter] public LatestReading? Latest { get; set; }
     [Parameter] public string? Error { get; set; }
+    [Parameter] public DateTime NowUtc { get; set; }
     [Parameter] public EventCallback OnRetry { get; set; }
+
+    private DateTime? StaleTime(bool stale) => stale ? Latest!.Weather?.TimestampUtc ?? Latest.TimestampUtc : null;
 }

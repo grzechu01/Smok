@@ -62,6 +62,11 @@
 - **.NET 10:** .NET 8 traci wsparcie 2026-11-10. Przejście Viewer na `net10.0` pasuje do tej pracy (zmiana w csproj i test lokalny), ale wymaga też zmiany stosu na App Service przy wdrożeniu.
 - **Firewall Azure SQL:** obecnie dopuszcza tylko usługi Azure, więc lokalny test na prawdziwej bazie wymaga reguły dla Twojego IP.
 
+- **Założenie o kolejności wierszy (ważne przy zmianach w Function):**
+  - Viewer zakłada, że `Id` rośnie razem z `Timestamp`. Dziś to prawda, bo Function zapisuje `Timestamp = DateTime.UtcNow` w chwili wstawienia.
+  - Jeśli Function zacznie zapisywać czas z urządzenia albo ktoś doimportuje stare dane, zakresy w Viewerze będą po cichu gubić pomiary.
+  - Przy takiej zmianie trzeba założyć indeks na `Timestamp` (konto admina) i usunąć ograniczenie po `Id` w `MeasurementsService`.
+
 ## Wynik (wdrożone lokalnie, niewdrożone na Azure)
 
 - **Koszt zapytań:** seek po `Id` zamiast skanu (Id i Timestamp rosną razem — sprawdzone na całej tabeli: 0 wyjątków).

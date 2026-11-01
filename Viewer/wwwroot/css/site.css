@@ -749,3 +749,6 @@ h1:focus { outline: none; }
 
 .stat-value.is-missing,
 .data-table .missing { color: var(--text-muted); }
+
+.aq-card.is-stale { border-left-color: var(--chart-axis); }
+.aq-card.is-stale .aq-values dd:first-of-type { color: var(--text-muted); }

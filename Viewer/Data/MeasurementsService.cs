@@ -15,6 +15,8 @@ namespace SmokViewer.Data
         // The table has only a clustered PK on Id. Rows are inserted with Timestamp = UtcNow, so Id order
         // matches Timestamp order; scanning backwards from the newest row to the first row older than @from
         // gives the Id where the range starts, and the main query then seeks on Id instead of scanning the table.
+        // If the Function ever stores device timestamps or rows get back-filled, this breaks silently: switch to an
+        // index on Timestamp instead (see SmokViewer_UX_Audit.md).
         private const string LowerIdBound =
             "DECLARE @lo int = ISNULL((SELECT TOP (1) Id FROM [dbo].[Measurements] WHERE [Timestamp] < @from ORDER BY Id DESC), 0);\n";
 
@@ -42,6 +44,9 @@ namespace SmokViewer.Data
 
         private readonly IConfiguration _configuration;
         private readonly IMemoryCache _cache;
+        // Basic tier has 5 DTU: range queries queue up here instead of running side by side when many visitors
+        // (or a crawler walking custom ranges) arrive at once.
+        private readonly SemaphoreSlim _queryGate = new(2, 2);
 
         public MeasurementsService(IConfiguration configuration, IMemoryCache cache)
         {
@@ -53,6 +58,7 @@ namespace SmokViewer.Data
             _cache.GetOrCreateAsync("latest", async entry =>
             {
                 entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+                entry.Size = 1;
 
                 await using var db = Connect();
                 var rows = (await db.QueryAsync<RawRow>(new CommandDefinition(LatestSql, cancellationToken: cancellationToken))).ToList();
@@ -80,15 +86,33 @@ namespace SmokViewer.Data
             var resolution = Resolution.For(range);
             var key = $"series:{range.FromUtc:O}:{range.ToUtc:O}:{resolution.BucketMinutes}";
 
-            var points = await _cache.GetOrCreateAsync(key, async entry =>
+            // The cached SeriesResult instance itself is returned, so callers can tell unchanged data by reference.
+            if (_cache.TryGetValue(key, out SeriesResult? cached))
+                return cached!;
+
+            await _queryGate.WaitAsync(cancellationToken);
+            try
             {
-                entry.AbsoluteExpirationRelativeToNow = CacheDuration(range);
-                return resolution.IsRaw
+                // Another caller may have filled the cache while this one waited.
+                if (_cache.TryGetValue(key, out cached))
+                    return cached!;
+
+                var points = resolution.IsRaw
                     ? await QueryRawAsync(range, cancellationToken)
                     : await QueryBucketsAsync(range, resolution.BucketMinutes, cancellationToken);
-            });
+                var result = new SeriesResult(range, resolution, points);
 
-            return new SeriesResult(range, resolution, points!);
+                _cache.Set(key, result, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = CacheDuration(range),
+                    Size = Math.Max(1, points.Count)
+                });
+                return result;
+            }
+            finally
+            {
+                _queryGate.Release();
+            }
         }
 
         private static TimeSpan CacheDuration(TimeRange range)
@@ -116,8 +140,16 @@ namespace SmokViewer.Data
         {
             // Buckets are cut in Warsaw local time so that days start at local midnight. SQL gets the UTC
             // offset as a CASE over the DST changes inside the range, which is far cheaper than AT TIME ZONE per row.
-            var parameters = RangeParameters(range);
-            var periods = OffsetPeriods(range);
+            var origin = BucketOrigin(range, bucketMinutes);
+
+            // Start at the first whole bucket: a bucket cut by the range start would hold only part of its
+            // readings, and its average and min/max would not be comparable with the others.
+            var fromLocal = Warsaw.ToLocal(range.FromUtc);
+            var skipped = (long)Math.Ceiling((fromLocal - origin).TotalMinutes / bucketMinutes);
+            var queryRange = range with { FromUtc = Warsaw.ToUtc(origin.AddMinutes(skipped * bucketMinutes)) };
+
+            var parameters = RangeParameters(queryRange);
+            var periods = OffsetPeriods(queryRange);
             var offset = new StringBuilder(periods.Count > 1 ? "CASE" : "");
             for (var i = 0; i < periods.Count; i++)
             {
@@ -129,7 +161,6 @@ namespace SmokViewer.Data
                 offset.Append($" WHEN m.[Timestamp] < @t{i} THEN @o{i - 1}");
             offset.Append(periods.Count > 1 ? $" ELSE @o{periods.Count - 1} END" : "@o0");
 
-            var origin = BucketOrigin(range, bucketMinutes);
             parameters.Add("origin", origin, DbType.DateTime2);
             parameters.Add("bucket", bucketMinutes);
 

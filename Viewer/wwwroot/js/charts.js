@@ -3,7 +3,6 @@
 
 const ZONE = 'Europe/Warsaw';
 const LOCALE = 'pl';
-const { DateTime } = window.luxon;
 
 const charts = new Map(); // canvas -> { chart, payload }
 
@@ -24,7 +23,7 @@ function withAlpha(color, alpha) {
 }
 
 function tooltipTitle(ms, bucketMinutes) {
-    const start = DateTime.fromMillis(ms, { zone: ZONE }).setLocale(LOCALE);
+    const start = window.luxon.DateTime.fromMillis(ms, { zone: ZONE }).setLocale(LOCALE);
     if (bucketMinutes === 0) return start.toFormat('ccc d LLL, HH:mm');
     if (bucketMinutes < 1440) return `${start.toFormat('ccc d LLL, HH:mm')}–${start.plus({ minutes: bucketMinutes }).toFormat('HH:mm')}`;
     if (bucketMinutes === 1440) return start.toFormat('cccc d LLL yyyy');
@@ -191,6 +190,9 @@ function buildConfig(payload) {
 }
 
 export function render(canvas, payload) {
+    if (!window.Chart || !window.luxon) {
+        throw new Error('Chart libraries did not load');
+    }
     const existing = charts.get(canvas);
     existing?.chart.destroy();
     const chart = new window.Chart(canvas, buildConfig(payload));

@@ -1,5 +1,6 @@
 @using SmokViewer.Data
 @inject IJSRuntime JS
+@inject ILogger<TimeSeriesChart> Logger
 @implements IAsyncDisposable
 
 <section class="card chart-card @(Busy && Data is not null ? "is-refreshing" : null)" aria-busy="@(Busy ? "true" : "false")">
@@ -26,7 +27,11 @@
         {
             <p class="empty">Brak pomiarów w tym okresie.</p>
         }
-        <canvas @ref="_canvas" role="img" aria-label="@($"Wykres: {Title}. Wartości są w tabeli danych poniżej.")" hidden="@(!HasData)"></canvas>
+        else if (_renderFailed)
+        {
+            <p class="empty">Nie udało się narysować wykresu. Dane są w tabeli poniżej.</p>
+        }
+        <canvas @ref="_canvas" role="img" aria-label="@($"Wykres: {Title}. Wartości są w tabeli danych poniżej.")" hidden="@(!HasData || _renderFailed)"></canvas>
     </div>
 </section>
 
@@ -45,6 +50,7 @@
     private ElementReference _canvas;
     private IJSObjectReference? _module;
     private SeriesResult? _rendered;
+    private bool _renderFailed;
 
     private bool HasData => Data is not null && Data.Points.Any(p => Series.Any(s => p[s.Metric] is not null));
 
@@ -66,11 +72,28 @@
             return;
         _rendered = Data;
 
-        _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/charts.js");
-        if (HasData)
-            await _module.InvokeVoidAsync("render", _canvas, BuildPayload(Data!));
-        else
-            await _module.InvokeVoidAsync("destroy", _canvas);
+        var failed = false;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/charts.js");
+            if (HasData)
+                await _module.InvokeVoidAsync("render", _canvas, BuildPayload(Data!));
+            else
+                await _module.InvokeVoidAsync("destroy", _canvas);
+        }
+        catch (JSException ex)
+        {
+            // A chart that cannot be drawn (e.g. the chart library failed to load) must not take the
+            // whole circuit down with it; the cards and the table keep working.
+            Logger.LogWarning(ex, "Rendering chart {Title} failed", Title);
+            failed = true;
+        }
+
+        if (failed != _renderFailed)
+        {
+            _renderFailed = failed;
+            StateHasChanged();
+        }
     }
 
     private object BuildPayload(SeriesResult data)

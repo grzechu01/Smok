@@ -115,7 +115,8 @@
         }
 
         var from = Warsaw.ToLocal(Data.Range.FromUtc).ToString("yyyy-MM-dd");
-        var to = Warsaw.ToLocal(Data.Range.ToUtc).ToString("yyyy-MM-dd");
+        // ToUtc is exclusive: a range ending at local midnight ends on the previous day.
+        var to = Warsaw.ToLocal(Data.Range.ToUtc).AddTicks(-1).ToString("yyyy-MM-dd");
         await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/charts.js");
         await module.InvokeVoidAsync("download", $"smok_{from}_{to}.csv", csv.ToString(), "text/csv;charset=utf-8");
     }

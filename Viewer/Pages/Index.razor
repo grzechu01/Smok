@@ -27,7 +27,7 @@
 <main class="page">
     <section class="section" aria-labelledby="now-title">
         <h1 id="now-title" class="section-title" tabindex="-1">Teraz</h1>
-        <CurrentConditions Latest="_latest" Error="@_latestError" OnRetry="LoadLatestAsync" />
+        <CurrentConditions Latest="_latest" Error="@_latestError" NowUtc="_nowUtc" OnRetry="LoadLatestAsync" />
     </section>
 
     <section class="section" aria-labelledby="history-title">
@@ -46,7 +46,8 @@
             <nav class="segmented" aria-label="Zakres czasu">
                 @foreach (var (preset, key, label) in Presets)
                 {
-                    <a href="@($"?zakres={key}")" class="segment" aria-current="@(_range.Preset == preset && !_customOpen ? "page" : null)">@label</a>
+                    @* The click also closes the custom form: re-selecting the current range keeps the URL, so no navigation happens. *@
+                    <a href="@($"?zakres={key}")" class="segment" aria-current="@(_range.Preset == preset && !_customOpen ? "page" : null)" @onclick="() => _customOpen = false">@label</a>
                 }
                 <button type="button" class="segment" aria-expanded="@(_customOpen ? "true" : "false")" aria-current="@(_range.Preset == RangePreset.Custom || _customOpen ? "page" : null)" @onclick="ToggleCustom">Własny…</button>
             </nav>
@@ -75,7 +76,7 @@
         {
             <div class="card error-card" role="alert">
                 <p><strong>Nie udało się pobrać danych.</strong> @_seriesError</p>
-                <button class="button" @onclick="() => LoadSeriesAsync()">Spróbuj ponownie</button>
+                <button class="button" @onclick="() => ReloadSeriesAsync()">Spróbuj ponownie</button>
             </div>
         }
 
@@ -153,7 +154,7 @@
         // Data is fetched only once the circuit is live (OnAfterRenderAsync): the prerendered page is the
         // instant shell with placeholders, and the database is queried once per visit rather than twice.
         if (_interactive)
-            _ = LoadSeriesAsync();
+            _ = LoadSeriesAsync(_range);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -162,7 +163,7 @@
             return;
 
         _interactive = true;
-        _ = LoadSeriesAsync();
+        _ = LoadSeriesAsync(_range);
         await LoadLatestAsync();
         _ = RefreshLoopAsync();
     }
@@ -207,22 +208,36 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task LoadSeriesAsync()
+    /// <summary>Reloads the selected range; a preset is moved forward to end now.</summary>
+    private Task ReloadSeriesAsync(bool silent = false)
+    {
+        _nowUtc = DateTime.UtcNow;
+        return LoadSeriesAsync(CurrentRange(), silent);
+    }
+
+    /// <param name="silent">Background refresh: keep the charts as they are instead of dimming them.</param>
+    private async Task LoadSeriesAsync(TimeRange range, bool silent = false)
     {
         // A newer selection supersedes a query still in flight.
         _seriesCts?.Cancel();
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_disposed.Token);
         _seriesCts = cts;
 
-        _seriesLoading = true;
-        _seriesError = null;
-        await InvokeAsync(StateHasChanged);
+        if (!silent)
+        {
+            _range = range;
+            _seriesLoading = true;
+            _seriesError = null;
+            await InvokeAsync(StateHasChanged);
+        }
 
         try
         {
-            var series = await Measurements.GetSeriesAsync(_range, cts.Token);
+            var series = await Measurements.GetSeriesAsync(range, cts.Token);
             if (cts.IsCancellationRequested)
                 return;
+            // A background refresh moves the label only together with the data.
+            _range = range;
             _series = series;
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
@@ -231,7 +246,9 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Loading measurements for {From}–{To} failed", _range.FromUtc, _range.ToUtc);
+            Logger.LogError(ex, "Loading measurements for {From}–{To} failed", range.FromUtc, range.ToUtc);
+            if (silent)
+                return; // keep showing the data we have; the next refresh tries again
             _seriesError = "Sprawdź połączenie i spróbuj ponownie.";
             // Never leave the previous range on screen under the new range's label.
             _series = null;
@@ -254,11 +271,8 @@
                 if (++ticks % 5 == 0)
                 {
                     await LoadLatestAsync();
-                    if (_range.Preset != RangePreset.Custom)
-                    {
-                        _range = CurrentRange();
-                        await LoadSeriesAsync();
-                    }
+                    if (_range.Preset != RangePreset.Custom && _seriesError is null && !_seriesLoading)
+                        await ReloadSeriesAsync(silent: true);
                 }
                 else
                 {
@@ -299,7 +313,7 @@
         : (_nowUtc - _latest.TimestampUtc) switch
         {
             var age when age <= TimeSpan.FromMinutes(25) => "is-live",
-            var age when age <= TimeSpan.FromMinutes(60) => "is-late",
+            var age when age <= LatestReading.StaleAfter => "is-late",
             _ => "is-offline"
         };
 
