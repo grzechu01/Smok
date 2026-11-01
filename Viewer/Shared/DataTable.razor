@@ -96,9 +96,9 @@
 
         var csv = new StringBuilder();
         var raw = Data.Resolution.IsRaw;
-        csv.Append("czas_od (Europe/Warsaw);liczba_pomiarow");
+        csv.Append("time_from (Europe/Warsaw);readings");
         foreach (var metric in Display.All)
-            csv.Append(raw ? $";{metric.Metric}" : $";{metric.Metric}_sr;{metric.Metric}_min;{metric.Metric}_max");
+            csv.Append(raw ? $";{metric.Metric}" : $";{metric.Metric}_avg;{metric.Metric}_min;{metric.Metric}_max");
         csv.AppendLine();
 
         foreach (var point in Data.Points)

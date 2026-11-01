@@ -47,7 +47,7 @@
                 @foreach (var (preset, key, label) in Presets)
                 {
                     @* The click also closes the custom form: re-selecting the current range keeps the URL, so no navigation happens. *@
-                    <a href="@($"?zakres={key}")" class="segment" aria-current="@(_range.Preset == preset && !_customOpen ? "page" : null)" @onclick="() => _customOpen = false">@label</a>
+                    <a href="@($"?range={key}")" class="segment" aria-current="@(_range.Preset == preset && !_customOpen ? "page" : null)" @onclick="() => _customOpen = false">@label</a>
                 }
                 <button type="button" class="segment" aria-expanded="@(_customOpen ? "true" : "false")" aria-current="@(_range.Preset == RangePreset.Custom || _customOpen ? "page" : null)" @onclick="ToggleCustom">Własny…</button>
             </nav>
@@ -103,7 +103,7 @@
         (RangePreset.Day, "24h", "24 h"),
         (RangePreset.Week, "7d", "7 dni"),
         (RangePreset.Month, "30d", "30 dni"),
-        (RangePreset.Year, "1r", "Rok")
+        (RangePreset.Year, "1y", "Rok")
     };
 
     // First reading in the database; custom ranges cannot start earlier.
@@ -117,9 +117,9 @@
         new TimeSeriesChart.ReferenceLine(AirQuality.WhoPM10Daily, "WHO PM10")
     };
 
-    [SupplyParameterFromQuery(Name = "zakres")] public string? RangeKey { get; set; }
-    [SupplyParameterFromQuery(Name = "od")] public string? CustomFromParam { get; set; }
-    [SupplyParameterFromQuery(Name = "do")] public string? CustomToParam { get; set; }
+    [SupplyParameterFromQuery(Name = "range")] public string? RangeKey { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? CustomFromParam { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] public string? CustomToParam { get; set; }
 
     private TimeRange _range = TimeRange.ForPreset(RangePreset.Day, DateTime.UtcNow);
     private (DateOnly From, DateOnly To)? _customDays;
@@ -305,7 +305,7 @@
             return;
         }
         _customMessage = null;
-        Navigation.NavigateTo($"?od={_customFrom:yyyy-MM-dd}&do={_customTo:yyyy-MM-dd}");
+        Navigation.NavigateTo($"?from={_customFrom:yyyy-MM-dd}&to={_customTo:yyyy-MM-dd}");
     }
 
     private string SensorStatusClass => _latest is null

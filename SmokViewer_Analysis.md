@@ -57,7 +57,7 @@ Wszystkie zasoby są w grupie `smok-rg` (West Europe).
   - ocena jakości powietrza wg indeksu GIOŚ, liczona ze średnich 1-godzinnych PM2.5 i PM10;
   - temperatura, wilgotność i ciśnienie ze zmianą w ciągu ostatniej godziny;
   - status czujnika; po ponad godzinie bez danych karty pokazują „Brak aktualnych danych”.
-- **Historia:** zakresy 24 h, 7 dni, 30 dni, rok i własny (`?zakres=24h|7d|30d|1r` albo `?od=RRRR-MM-DD&do=RRRR-MM-DD`). Wykresy Chart.js 4: pył z liniami wytycznych WHO 2021 oraz temperatura, wilgotność i ciśnienie z pasmem min–maks. Pod wykresami tabela z eksportem CSV.
+- **Historia:** zakresy 24 h, 7 dni, 30 dni, rok i własny (`?range=24h|7d|30d|1y` albo `?from=RRRR-MM-DD&to=RRRR-MM-DD`). Wykresy Chart.js 4: pył z liniami wytycznych WHO 2021 oraz temperatura, wilgotność i ciśnienie z pasmem min–maks. Pod wykresami tabela z eksportem CSV.
 - **Agregacja w SQL:**
   - zakres do 2 dni: surowe pomiary;
   - dłuższe zakresy: średnia, minimum i maksimum w kubełkach 1 h, 3 h, 6 h, 12 h, 1 doby lub 1 tygodnia (najwyżej ok. 400 punktów);
