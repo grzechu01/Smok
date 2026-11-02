@@ -4,7 +4,7 @@ Domowa stacja pomiaru powietrza. Czujnik co kilka minut wysyła pomiar do Azure 
 
 ```
 czujnik (ESP8266: PMS7003 + BME280)
-   │  HTTP POST JSON, port 80
+   │  HTTPS POST JSON, nagłówek x-functions-key
    ▼
 Function  smok.azurewebsites.net/api/store      (Flex Consumption, .NET 10 isolated)
    │  INSERT
@@ -20,12 +20,13 @@ Wszystkie zasoby są w grupie `smok-rg` (West Europe).
 ## Urządzenie
 
 - Płytka NodeMCU v3 (ESP8266) z czujnikami PMS7003 (PM1, PM2.5, PM10) i BME280 (temperatura, wilgotność, ciśnienie). Firmware: repozytorium `SmogomierzSlim`.
-- Stary firmware (Arduino) ma adres `smok.azurewebsites.net`, ścieżkę `/api/store` i port 80 wpisane na stałe i wysyła dane co ok. 10 minut. Konfiguracja ESPHome (gałąź `esphome` w `SmogomierzSlim`) bierze adres z `secrets.yaml` i wysyła co 3 minuty.
+- Od 2026-11-02 płytka działa na ESPHome (`esphome/smogomierz.yaml` w `SmogomierzSlim`). Wysyła pomiar co 3 minuty na `https://smok.azurewebsites.net/api/store` z kluczem funkcji `smogomierz` w nagłówku `x-functions-key`; adres i klucz są w `secrets.yaml`.
+- Stary firmware Arduino (HTTP, port 80, bez klucza) został nadpisany i po tej zmianie już by nie działał.
 - Treść żądania: `{"PM1":…, "PM25":…, "PM10":…, "Temperature":…, "Humidity":…, "Pressure":…}`.
 
 ## Function (`Function/`)
 
-- Funkcja `store` (HTTP GET/POST, anonimowa) zapisuje pomiar z `Timestamp = DateTime.UtcNow`, czyli z czasem serwera, a nie urządzenia.
+- Funkcja `store` (GET/POST, wymaga klucza funkcji) zapisuje pomiar z `Timestamp = DateTime.UtcNow`, czyli z czasem serwera, a nie urządzenia.
 - JSON jest czytany pobłażliwie, tak jak w dawnej wersji in-process (Newtonsoft):
   - wielkość liter w nazwach pól nie ma znaczenia;
   - liczby mogą przyjść jako tekst;
@@ -33,7 +34,8 @@ Wszystkie zasoby są w grupie `smok-rg` (West Europe).
 - Błędny lub pusty JSON dostaje odpowiedź 400.
 - Ustawienia aplikacji: `SmokSql` (connection string), `AzureWebJobsStorage`, `DEPLOYMENT_STORAGE_CONNECTION_STRING` (konto `smokstorage`, StorageV2, TLS 1.2) i `APPLICATIONINSIGHTS_CONNECTION_STRING` (`SmokInsights`).
 - Plan Flex Consumption: 512 MB pamięci na instancję, najwyżej 2 instancje. Ruch mieści się w darmowym limicie.
-- HTTPS nie jest wymuszane, bo ESP8266 nie weryfikuje certyfikatów, a stary firmware łączy się po HTTP.
+- Aplikacja wymaga HTTPS (`httpsOnly`): żądania po HTTP dostają przekierowanie 301. Bez ważnego klucza odpowiedź to 401.
+- Klucze funkcji: `default`, `storeMeasurement` i `smogomierz` (używany przez płytkę).
 
 ## Baza (`dbo.Measurements`)
 
@@ -102,6 +104,6 @@ Basic to najtańszy plan Azure SQL. Darmowa oferta Azure SQL nie pasuje, bo zapi
 
 ## Znane ograniczenia
 
-- Endpoint `/api/store` jest anonimowy i działa po zwykłym HTTP, więc każdy, kto zna adres, może zapisać pomiar. Zabezpieczenie (klucz) wymaga zmiany firmware i najlepiej zrobić je razem z przejściem na ESPHome.
+- Klucz funkcji jest zapisany w firmware płytki. Jeśli wycieknie (np. z `secrets.yaml`), trzeba go zmienić w Azure i wgrać firmware ponownie.
 - Błędne odczyty BME280 są tylko pomijane w Viewerze, a nie usuwane z bazy.
 - Audyt UX i decyzje projektowe Viewera: `SmokViewer_UX_Audit.md`.

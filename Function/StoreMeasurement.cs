@@ -36,9 +36,11 @@ namespace Smok
             _log = log;
         }
 
+        // Requires a function key: the ESPHome firmware sends the "smogomierz" key of this function in the
+        // x-functions-key header. Requests without a valid key get 401 before this code runs.
         [Function("store")]
         public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req)
+            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req)
         {
             MeasurementRequestDto? dto;
             try
