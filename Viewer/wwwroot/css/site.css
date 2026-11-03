@@ -553,33 +553,13 @@ h1:focus { outline: none; }
     gap: 16px;
 }
 
-.chart-grid {
-    display: grid;
-    gap: 16px;
-    grid-template-columns: minmax(0, 1fr);
-}
-
-@media (min-width: 640px) {
-    .chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    /* Two columns leave the third chart alone on its row; let it use the full width. */
-    .chart-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
-}
-
-@media (min-width: 1100px) {
-    .chart-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .chart-grid > :last-child:nth-child(odd) { grid-column: auto; }
-}
-
 .chart-body {
     position: relative;
-    height: 220px;
+    height: 260px;
 }
 
-.charts > .chart-card .chart-body { height: 260px; }
-
 @media (min-width: 720px) {
-    .chart-body { height: 240px; }
-    .charts > .chart-card .chart-body { height: 320px; }
+    .chart-body { height: 320px; }
 }
 
 .chart-body canvas {

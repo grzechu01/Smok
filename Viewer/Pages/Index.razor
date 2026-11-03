@@ -82,11 +82,9 @@
 
         <div class="charts">
             <TimeSeriesChart Title="Pył zawieszony" Series="ParticulateSeries" Data="_series" Busy="_seriesLoading" ZeroBased="true" References="ParticulateReferences" />
-            <div class="chart-grid">
-                <TimeSeriesChart Title="Temperatura" Series="new[] { Display.Temperature }" Data="_series" Busy="_seriesLoading" Band="true" />
-                <TimeSeriesChart Title="Wilgotność" Series="new[] { Display.Humidity }" Data="_series" Busy="_seriesLoading" Band="true" />
-                <TimeSeriesChart Title="Ciśnienie" Series="new[] { Display.Pressure }" Data="_series" Busy="_seriesLoading" Band="true" />
-            </div>
+            <TimeSeriesChart Title="Temperatura" Series="new[] { Display.Temperature }" Data="_series" Busy="_seriesLoading" Band="true" />
+            <TimeSeriesChart Title="Wilgotność" Series="new[] { Display.Humidity }" Data="_series" Busy="_seriesLoading" Band="true" />
+            <TimeSeriesChart Title="Ciśnienie" Series="new[] { Display.Pressure }" Data="_series" Busy="_seriesLoading" Band="true" />
         </div>
 
         <DataTable Data="_series" />
